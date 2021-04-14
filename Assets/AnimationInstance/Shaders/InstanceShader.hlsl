@@ -26,20 +26,20 @@ void GetMatrix_float(
     half4 boneIndex, 
     float4 boneWeight, 
     SamplerState samplerState, 
-    float frame,
+    float globalTime,
     out float4 animPosition,
     out float4 animNormal
     )
 {
     float4 animSettings = _AnimTex.SampleLevel(samplerState, GetUV(_AnimationType), 0);     
-    uint offsetFrame = (uint)((frame + _AnimOffset) * 30);
+    uint offsetFrame = (uint)((globalTime + _AnimOffset) * animSettings.z);
 	uint currentFrame = (uint)animSettings.x + offsetFrame % (uint)animSettings.y;
-	uint clampedIndex = 255 + currentFrame * (uint)_PixelCountPerFrame;
+	uint clampedPixelIndex = 255 + currentFrame * (uint)_PixelCountPerFrame;
 					
-    float4x4 bone1Matrix = GetMatrix(clampedIndex, boneIndex.x, samplerState);
-    float4x4 bone2Matrix = GetMatrix(clampedIndex, boneIndex.y, samplerState);
-    float4x4 bone3Matrix = GetMatrix(clampedIndex, boneIndex.z, samplerState);
-    float4x4 bone4Matrix = GetMatrix(clampedIndex, boneIndex.w, samplerState);
+    float4x4 bone1Matrix = GetMatrix(clampedPixelIndex, boneIndex.x, samplerState);
+    float4x4 bone2Matrix = GetMatrix(clampedPixelIndex, boneIndex.y, samplerState);
+    float4x4 bone3Matrix = GetMatrix(clampedPixelIndex, boneIndex.z, samplerState);
+    float4x4 bone4Matrix = GetMatrix(clampedPixelIndex, boneIndex.w, samplerState);
 			
     animPosition =
         mul(bone1Matrix, position) * boneWeight.x +

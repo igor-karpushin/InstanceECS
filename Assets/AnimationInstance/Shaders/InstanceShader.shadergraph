@@ -23,6 +23,9 @@
         },
         {
             "m_Id": "752314eda777436dafa3daaac64e9a4b"
+        },
+        {
+            "m_Id": "516afc3e77f64bc68e1f00fc19e520c5"
         }
     ],
     "m_Keywords": [
@@ -503,8 +506,8 @@
     "m_OverrideReferenceName": "_PixelCountPerFrame",
     "m_GeneratePropertyBlock": true,
     "m_Precision": 0,
-    "overrideHLSLDeclaration": false,
-    "hlslDeclarationOverride": 0,
+    "overrideHLSLDeclaration": true,
+    "hlslDeclarationOverride": 3,
     "m_Hidden": false,
     "m_Value": 0.0,
     "m_FloatType": 2,
@@ -829,9 +832,9 @@
     "m_Guid": {
         "m_GuidSerialized": "ba510b31-e080-482e-8463-2d49e3e545f6"
     },
-    "m_Name": "Metalic",
+    "m_Name": "Metallic",
     "m_DefaultReferenceName": "Vector1_3ed11a5cad31439194e67d669a9321dd",
-    "m_OverrideReferenceName": "_Metalic",
+    "m_OverrideReferenceName": "_Metallic",
     "m_GeneratePropertyBlock": true,
     "m_Precision": 0,
     "overrideHLSLDeclaration": false,
@@ -986,6 +989,29 @@
         "a": 0.0
     },
     "m_ColorMode": 0
+}
+
+{
+    "m_SGVersion": 1,
+    "m_Type": "UnityEditor.ShaderGraph.Internal.Vector1ShaderProperty",
+    "m_ObjectId": "516afc3e77f64bc68e1f00fc19e520c5",
+    "m_Guid": {
+        "m_GuidSerialized": "5cdf39f4-f3bc-4adb-a9f6-d46a1cfa16c7"
+    },
+    "m_Name": "PixelStart",
+    "m_DefaultReferenceName": "Vector1_516afc3e77f64bc68e1f00fc19e520c5",
+    "m_OverrideReferenceName": "_PixelStart",
+    "m_GeneratePropertyBlock": true,
+    "m_Precision": 0,
+    "overrideHLSLDeclaration": true,
+    "hlslDeclarationOverride": 3,
+    "m_Hidden": false,
+    "m_Value": 0.0,
+    "m_FloatType": 2,
+    "m_RangeValues": {
+        "x": 0.0,
+        "y": 1.0
+    }
 }
 
 {
@@ -1947,7 +1973,7 @@
     "m_Type": "UnityEditor.ShaderGraph.Vector1MaterialSlot",
     "m_ObjectId": "d2e2198baf824a40a56e3e1c5202e5d0",
     "m_Id": 0,
-    "m_DisplayName": "Metalic",
+    "m_DisplayName": "Metallic",
     "m_SlotType": 1,
     "m_Hidden": false,
     "m_ShaderOutputName": "Out",

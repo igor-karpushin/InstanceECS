@@ -13,15 +13,9 @@ namespace AnimationInstance.Editor
 {
     public class AnimatedMeshToAsset
     {
-
-        class AnimInfo
-        {
-            public int Start;
-            public int Count;
-        }
         
-        private const int BoneMatrixRowCount = 3;
-        private const int TargetFrameRate = 30;
+        const int BoneMatrixRowCount = 3;
+        const int TargetFrameRate = 30;
 
         [MenuItem("AnimatedMeshRendererGenerator/MeshToAsset")]
         private static void Generate()
@@ -91,7 +85,7 @@ namespace AnimationInstance.Editor
             SkinnedMeshRenderer smr)
         {
             var animationClips = clips as AnimationClip[] ?? clips.ToArray();
-            var textureBoundary = GetCalculatedTextureBoundary(animationClips, smr.bones.Count());
+            var textureBoundary = GetCalculatedTextureBoundary(animationClips, smr.bones.Length);
 
             var texture = new Texture2D(
                 (int)textureBoundary.x, 
@@ -119,6 +113,8 @@ namespace AnimationInstance.Editor
                     UnityEngine.Debug.LogWarning($"Conversion Error: {error.Message}");
                 }
                 currentClipFrames = endFrame;
+                
+                
             }
 
             pixelIndex = 255;

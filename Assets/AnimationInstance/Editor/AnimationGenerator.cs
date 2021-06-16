@@ -317,6 +317,8 @@ namespace AnimationInstance.Editor
                         }
                     }
                 }
+                
+                DestroyImmediate(clonePrefab);
             }
             
             if (pixelIndex == 0)

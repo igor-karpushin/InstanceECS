@@ -1,8 +1,8 @@
 
 float2 GetUV(int index)
 {
-    uint row = index / (uint)_AnimTex_TexelSize.z;
-    uint col = index % (uint)_AnimTex_TexelSize.z;
+    uint row = (index + _PixelStart) / (uint)_AnimTex_TexelSize.z;
+    uint col = (index + _PixelStart) % (uint)_AnimTex_TexelSize.z;
 
     return float2(col / _AnimTex_TexelSize.z, row / _AnimTex_TexelSize.w);
 }
@@ -28,25 +28,41 @@ void GetMatrix_float(
     SamplerState samplerState, 
     float globalTime,
     out float4 animPosition,
-    out float4 animNormal
-    )
+    out float4 animNormal)
 {
-    float4 animSettings = _AnimTex.SampleLevel(samplerState, GetUV(_AnimationType), 0);     
-    uint offsetFrame = (uint)((globalTime + _AnimOffset) * animSettings.z);
-	uint currentFrame = (uint)animSettings.x + offsetFrame % (uint)animSettings.y;
-	uint clampedPixelIndex = 255 + currentFrame * (uint)_PixelCountPerFrame;
-					
-    float4x4 bone1Matrix = GetMatrix(clampedPixelIndex, boneIndex.x, samplerState);
-    float4x4 bone2Matrix = GetMatrix(clampedPixelIndex, boneIndex.y, samplerState);
-    float4x4 bone3Matrix = GetMatrix(clampedPixelIndex, boneIndex.z, samplerState);
-    float4x4 bone4Matrix = GetMatrix(clampedPixelIndex, boneIndex.w, samplerState);
-			
-    animPosition =
+    float4 animSettings = _AnimTex.SampleLevel(samplerState, GetUV(_AnimationType), 0);
+    float offsetFrame = (globalTime + _AnimOffset) * animSettings.z;      
+	
+	float currentFrame = animSettings.x + offsetFrame % animSettings.y;
+	uint clampedIndex = 255 + (uint)currentFrame * (uint)_PixelCountPerFrame;
+	
+    float4x4 bone1Matrix = GetMatrix(clampedIndex, boneIndex.x, samplerState);
+    float4x4 bone2Matrix = GetMatrix(clampedIndex, boneIndex.y, samplerState);
+    float4x4 bone3Matrix = GetMatrix(clampedIndex, boneIndex.z, samplerState);
+    float4x4 bone4Matrix = GetMatrix(clampedIndex, boneIndex.w, samplerState);
+    
+    float4 currentPosition =
         mul(bone1Matrix, position) * boneWeight.x +
         mul(bone2Matrix, position) * boneWeight.y +
         mul(bone3Matrix, position) * boneWeight.z +
         mul(bone4Matrix, position) * boneWeight.w;
-        
+    
+    currentFrame = animSettings.x + (offsetFrame + 1) % animSettings.y;
+	clampedIndex = 255 + (uint)currentFrame * (uint)_PixelCountPerFrame;
+    
+    bone1Matrix = GetMatrix(clampedIndex, boneIndex.x, samplerState);
+    bone2Matrix = GetMatrix(clampedIndex, boneIndex.y, samplerState);
+    bone3Matrix = GetMatrix(clampedIndex, boneIndex.z, samplerState);
+    bone4Matrix = GetMatrix(clampedIndex, boneIndex.w, samplerState);
+    
+    float4 nextPosition =
+        mul(bone1Matrix, position) * boneWeight.x +
+        mul(bone2Matrix, position) * boneWeight.y +
+        mul(bone3Matrix, position) * boneWeight.z +
+        mul(bone4Matrix, position) * boneWeight.w;
+    
+    animPosition = lerp(currentPosition, nextPosition, currentFrame - (uint)currentFrame);
+    
     animNormal =
         mul(bone1Matrix, normal) * boneWeight.x +
         mul(bone2Matrix, normal) * boneWeight.y +

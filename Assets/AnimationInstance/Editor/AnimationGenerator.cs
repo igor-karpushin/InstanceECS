@@ -1,8 +1,8 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using AnimationInstance.Ecs;
 using AnimationInstance.Scripts;
 using UnityEditor;
 using UnityEngine;
@@ -35,10 +35,14 @@ namespace AnimationInstance.Editor
 
         List<PrefabInstance> m_Prefabs;
         Texture2D m_AnimationTexture;
+        Dictionary<int, int> m_PartialTextureIndex;
+        Rect[] m_TexturePackRects;
+        Texture2D m_BaseTexture;
         
-        static readonly int s_PixelCountPerFrame = Shader.PropertyToID("_PixelCountPerFrame");
+        //static readonly int s_PixelCountPerFrame = Shader.PropertyToID("_PixelCountPerFrame");
         static readonly int s_PixelStart = Shader.PropertyToID("_PixelStart");
         static readonly int s_AnimTex = Shader.PropertyToID("_AnimTex");
+        static readonly int s_MainTex = Shader.PropertyToID("_MainTex");
 
         void OnEnable()
         {
@@ -49,6 +53,8 @@ namespace AnimationInstance.Editor
         void OnDisable()
         {
             EditorApplication.update -= GenerateAnimation;
+            m_BaseTexture = null;
+            m_TexturePackRects = null;
         }
         
         void GenerateAnimation()
@@ -68,7 +74,7 @@ namespace AnimationInstance.Editor
             s_Window = GetWindow(typeof(AnimationGenerator)) as AnimationGenerator;
         }
 
-        private void OnGUI()
+        void OnGUI()
         {
             GUI.skin.label.richText = true;
             GUILayout.BeginHorizontal();
@@ -200,47 +206,73 @@ namespace AnimationInstance.Editor
 
         Mesh BuildMesh(SkinnedMeshRenderer render)
         {
-            var mesh = UnityEngine.Object.Instantiate(render.sharedMesh);
+            var mesh = Instantiate(render.sharedMesh);
+            var uvUpdate = new Vector2[mesh.uv.Length];
+            for (var i = 0; i < mesh.subMeshCount; ++i)
+            {
+                var mainTexture = render.sharedMaterials[i].mainTexture;
+                
+                var textureHash = mainTexture.GetHashCode();
+                var rectIndex = m_PartialTextureIndex[textureHash];
+                var textureRect = m_TexturePackRects[rectIndex];
 
+                var subMeshInfo = mesh.GetSubMesh(i);
+                for (var v = 0; v < subMeshInfo.vertexCount; ++v)
+                {
+                    var uvVector = mesh.uv[subMeshInfo.firstVertex + v];
+                    uvUpdate[subMeshInfo.firstVertex + v] = new Vector2
+                    {
+                        x = uvVector.x * textureRect.width + textureRect.x,
+                        y = uvVector.y * textureRect.height + textureRect.y
+                    };
+                }
+            }
+            
             var boneSets = render.sharedMesh.boneWeights;
             var boneIndexes = boneSets.Select(x => new Vector4(x.boneIndex0, x.boneIndex1, x.boneIndex2, x.boneIndex3)).ToList();
             var boneWeights = boneSets.Select(x => new Vector4(x.weight0, x.weight1, x.weight2, x.weight3)).ToList();
 
+            mesh.SetUVs(0, uvUpdate);
             mesh.SetUVs(2, boneIndexes);
             mesh.SetUVs(3, boneWeights);
             return mesh;
         }
         
-        GameObject GenerateMeshRendererObject(string prefabName, Mesh mesh, Material[] materials)
+        GameObject GenerateMeshRendererObject(string prefabName, Mesh mesh, Material material)
         {
             var instancePrefab = new GameObject {name = prefabName};
+            var subMeshCount = mesh.subMeshCount;
 
             var mf = instancePrefab.AddComponent<MeshFilter>();
             mf.mesh = mesh;
 
-            var mr = instancePrefab.AddComponent<MeshRenderer>();
-            mr.sharedMaterials = materials;
-            mr.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
-            mr.reflectionProbeUsage = ReflectionProbeUsage.Off;
-            mr.lightProbeUsage = LightProbeUsage.Off;
+            var renderer = instancePrefab.AddComponent<MeshRenderer>();
+            renderer.motionVectorGenerationMode = MotionVectorGenerationMode.ForceNoMotion;
+            renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            renderer.lightProbeUsage = LightProbeUsage.Off;
+            
+            var sharedMaterials = new Material[subMeshCount];
+            for(var i = 0; i < subMeshCount; ++i)
+            {
+                sharedMaterials[i] = material;
+            }
 
+            renderer.sharedMaterials = sharedMaterials;
             return instancePrefab;
         }
         
-        Material[] GenerateMaterial(Renderer renderer, int frameStart, int framePixels)
+        void PrepareTexture(Object texture)
         {
-            var materials = new List<Material>();
-            foreach (var sharedMaterial in renderer.sharedMaterials)
+            var assetPath = AssetDatabase.GetAssetPath( texture );
+            var tImporter = AssetImporter.GetAtPath( assetPath ) as TextureImporter;
+            if (tImporter != null)
             {
-                var material = UnityEngine.Object.Instantiate(sharedMaterial);
-                material.name = $"Material{materials.Count}";
-                material.shader = Shader.Find("Shader Graphs/InstanceShader");
-                material.SetInt(s_PixelCountPerFrame, framePixels);
-                material.SetInt(s_PixelStart, frameStart);
-                material.enableInstancing = true;
-                materials.Add(material);
+                if (!tImporter.isReadable)
+                {
+                    tImporter.isReadable = true;
+                    AssetDatabase.ImportAsset(assetPath);
+                }
             }
-            return materials.ToArray();
         }
 
         void BuildAnimationTexture()
@@ -248,8 +280,38 @@ namespace AnimationInstance.Editor
             var pixelIndex = 0;
             var writePixels = new Color[2048 * 2048];
             var basePath = Path.Combine("Assets", "AnimationModels");
-            var updateMaterials = new List<Material>();
             ForceDirectory(basePath);
+
+            m_BaseTexture = new Texture2D(4096, 4096);
+            AssetDatabase.CreateAsset(m_BaseTexture, Path.Combine(basePath, "BaseTexture.asset"));
+            
+            var baseMaterial = new Material(Shader.Find("Shader Graphs/InstanceShader")) { name = "BaseMaterial", enableInstancing = true };
+            AssetDatabase.CreateAsset(baseMaterial, Path.Combine(basePath, "BaseMaterial.mat"));
+            
+            var partialTextures = new Dictionary<int, Texture2D>();
+            m_PartialTextureIndex = new Dictionary<int, int>();
+    
+            // create texture atlas
+            foreach (var prefabInstance in m_Prefabs)
+            {
+                var renderer = prefabInstance.Source.GetComponentInChildren<SkinnedMeshRenderer>();
+                var sharedMesh = renderer.sharedMesh;
+                for (var i = 0; i < sharedMesh.subMeshCount; ++i)
+                {
+                    // textures
+                    var mainTexture = renderer.sharedMaterials[i].mainTexture;
+                    var textureHash = mainTexture.GetHashCode();
+                    if (!partialTextures.ContainsKey(textureHash))
+                    {
+                        PrepareTexture(mainTexture);
+                        m_PartialTextureIndex.Add(textureHash, partialTextures.Count);
+                        partialTextures.Add(textureHash, mainTexture as Texture2D);
+                    }
+                }
+            }
+
+            m_TexturePackRects = m_BaseTexture.PackTextures(
+                partialTextures.Values.ToArray(), 0, 4096);
             
             foreach (var prefabInstance in m_Prefabs)
             {
@@ -259,19 +321,16 @@ namespace AnimationInstance.Editor
                 var renderer = prefabInstance.Source.GetComponentInChildren<SkinnedMeshRenderer>();
                 var startPixels = pixelIndex;
                 pixelIndex += k_AnimHeader;
-                
+
                 // create mesh
                 var prefabMesh = BuildMesh(renderer);
                 AssetDatabase.CreateAsset(prefabMesh, Path.Combine(prefabDirectory, "Mesh.asset"));
 
-                var materials = GenerateMaterial(renderer, startPixels, renderer.bones.Length * 3);
-                foreach (var material in materials)
-                {
-                    AssetDatabase.CreateAsset(material, Path.Combine(prefabDirectory, $"{material.name}.asset"));
-                    updateMaterials.Add(material);
-                }
-
-                var clonePrefab = GenerateMeshRendererObject(prefabInstance.Source.name, prefabMesh, materials);
+                var clonePrefab = GenerateMeshRendererObject(prefabInstance.Source.name, prefabMesh, baseMaterial);
+                var configComponent = clonePrefab.AddComponent<AnimationConvertComponent>();
+                configComponent.PixelCount = renderer.bones.Length * 3;
+                configComponent.PixelStart = startPixels;
+                
                 PrefabUtility.SaveAsPrefabAsset(clonePrefab, Path.Combine(prefabDirectory, $"{clonePrefab.name}.prefab"));
                 
                 foreach (var boneMatrix in renderer.bones.Select((b, idx) => b.localToWorldMatrix * renderer.sharedMesh.bindposes[idx]))
@@ -298,7 +357,7 @@ namespace AnimationInstance.Editor
                         }
                         catch (Exception error)
                         {
-                            UnityEngine.Debug.LogWarning($"Conversion Error: {error.Message}");
+                            Debug.LogWarning($"Conversion Error: {error.Message}");
                         }
 
                         currentClipFrames = startFrame + frameCount - 1;
@@ -318,7 +377,7 @@ namespace AnimationInstance.Editor
                     }
                 }
                 
-                DestroyImmediate(clonePrefab);
+                //DestroyImmediate(clonePrefab);
             }
             
             if (pixelIndex == 0)
@@ -351,10 +410,10 @@ namespace AnimationInstance.Editor
             m_AnimationTexture.filterMode = FilterMode.Point;
 
             AssetDatabase.CreateAsset(m_AnimationTexture, Path.Combine(basePath, "AnimationTexture.asset"));
-            foreach (var material in updateMaterials)
-            {
-                material.SetTexture(s_AnimTex, m_AnimationTexture);
-            }
+            baseMaterial.SetTexture(s_AnimTex, m_AnimationTexture);
+            baseMaterial.SetTexture(s_MainTex, m_BaseTexture);
+            baseMaterial.SetInt(s_PixelStart, pixelIndex);
         }
+        
     }
 }

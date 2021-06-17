@@ -60,7 +60,7 @@ namespace AnimationInstance.Editor
                 AssetDatabase.CreateAsset(material, $"{selectionPath}/AnimatedMesh/{material.name}.asset");
             }
             GenerateMeshRendererObject(targetObject, mesh, materials, out var go);
-            PrefabUtility.CreatePrefab($"{selectionPath}/AnimatedMesh/{targetObject.name}.prefab", go);
+            PrefabUtility.SaveAsPrefabAsset(go, $"{selectionPath}/AnimatedMesh/{targetObject.name}.prefab");
 
             Object.DestroyImmediate(go);
         }
